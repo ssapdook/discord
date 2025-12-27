@@ -4,8 +4,9 @@ const axios = require('axios');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-// ===== 슬래시 명령어 정의 (금액 옵션 선택, 필수 아님) =====
+// ===== 슬래시 명령어 정의 =====
 const commands = [
+    // 영어 명령어
     new SlashCommandBuilder()
         .setName('usd')
         .setDescription('USD를 한국 원화로 환산합니다.')
@@ -19,7 +20,7 @@ const commands = [
         .setDescription('JPY를 한국 원화로 환산합니다.')
         .addNumberOption(option =>
             option.setName('금액')
-                .setDescription('환산할 금액 (기본 100 JPY)')
+                .setDescription('환산할 금액 (기본 1 JPY)')
                 .setRequired(false)
         ),
     new SlashCommandBuilder()
@@ -30,6 +31,7 @@ const commands = [
                 .setDescription('환산할 금액 (기본 1 CNY)')
                 .setRequired(false)
         ),
+
     // 한국어 명령어
     new SlashCommandBuilder()
         .setName('달러')
@@ -44,7 +46,7 @@ const commands = [
         .setDescription('JPY를 한국 원화로 환산합니다.')
         .addNumberOption(option =>
             option.setName('금액')
-                .setDescription('환산할 금액 (기본 100 JPY)')
+                .setDescription('환산할 금액 (기본 1 JPY)')
                 .setRequired(false)
         ),
     new SlashCommandBuilder()
@@ -57,7 +59,7 @@ const commands = [
         )
 ].map(cmd => cmd.toJSON());
 
-// ===== 슬래시 명령어 등록 =====
+// ===== 슬래시 명령어 등록 (개발 서버) =====
 (async () => {
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     try {
@@ -83,7 +85,6 @@ client.on('interactionCreate', async interaction => {
 
     await interaction.deferReply();
 
-    const apiKey = process.env.EXCHANGE_API_KEY;
     try {
         let currency, defaultAmount, symbol, color;
 
@@ -98,7 +99,7 @@ client.on('interactionCreate', async interaction => {
             case 'jpy':
             case '엔':
                 currency = 'JPY';
-                defaultAmount = 100;
+                defaultAmount = 1; // 100 → 1로 변경
                 symbol = '💴';
                 color = 0xe67e22;
                 break;
@@ -113,16 +114,19 @@ client.on('interactionCreate', async interaction => {
                 return;
         }
 
-        // 옵션으로 금액 받기, 없으면 기본값
+        // 옵션 금액 가져오기, 없으면 기본값
         const amount = interaction.options.getNumber('금액') || defaultAmount;
 
-        const res = await axios.get(`https://v6.exchangerate-api.com/v6/${apiKey}/latest/${currency}`);
+        // API 요청
+        const res = await axios.get(`https://v6.exchangerate-api.com/v6/${process.env.EXCHANGE_API_KEY}/latest/${currency}`);
         const krw = res.data.conversion_rates.KRW;
         const krwAmount = (krw * amount).toLocaleString();
 
+        // 한국 시간(KST)
         const now = new Date();
         const koreaTime = now.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
 
+        // Embed 생성
         const embed = new EmbedBuilder()
             .setTitle(`${symbol} ${currency} → KRW 환율`)
             .setDescription(`**${amount} ${currency} = ${krwAmount} KRW**`)
@@ -130,6 +134,10 @@ client.on('interactionCreate', async interaction => {
             .setFooter({ text: `현재 시간: ${koreaTime}` });
 
         await interaction.editReply({ embeds: [embed] });
+
+        // 디버그 로그
+        console.log(`${currency} 환율 계산: ${amount} ${currency} = ${krwAmount} KRW`);
+
     } catch (error) {
         console.error('환율 명령어 실행 오류:', error);
         if (interaction.deferred || interaction.replied) {
